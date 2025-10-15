@@ -75,16 +75,26 @@ export default function QueryBuilder() {
   const executeQuery = async () => {
     setIsLoading(true);
     const query = buildQuery();
-    
-    // Simulate API call
-    setTimeout(() => {
-      setQueryResults([
-        { _id: '1', name: 'Product 1', price: 29.99, category: 'electronics' },
-        { _id: '2', name: 'Product 2', price: 49.99, category: 'clothing' },
-        { _id: '3', name: 'Product 3', price: 19.99, category: 'books' }
-      ]);
+    try {
+      const res = await fetch('http://127.0.0.1:6969/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ collection: selectedCollection, query }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || res.statusText);
+      }
+
+      const json = await res.json();
+      setQueryResults(json.results || []);
+    } catch (err) {
+      console.error('Query error', err);
+      alert('Query failed: ' + err.message);
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   return (
