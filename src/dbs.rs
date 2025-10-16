@@ -1,9 +1,9 @@
-use mongodb::{bson::{self, doc, Bson, Document}, Client};
+use mongodb::{bson::{self, doc, Document}, Client};
 use serde_json::Value as JsonValue;
 
 pub async fn list_databases(client: &Client) -> mongodb::error::Result<JsonValue> {
     // Get database names
-    let names = client.list_database_names(None, None).await?;
+    let names = client.list_database_names().await?;
 
     let mut out = Vec::new();
     for name in names {
@@ -15,9 +15,9 @@ pub async fn list_databases(client: &Client) -> mongodb::error::Result<JsonValue
         let db = client.database(&name);
 
         // collection names
-        let collections = db.list_collection_names(None).await.unwrap_or_default();
+        let collections = db.list_collection_names().await.unwrap_or_default();
         // dbStats command
-        let stats_doc = match db.run_command(doc! { "dbstats": 1u32 }, None).await {
+        let stats_doc = match db.run_command(doc! { "dbstats": 1u32 }).await {
             Ok(d) => d,
             Err(_) => Document::new(),
         };
