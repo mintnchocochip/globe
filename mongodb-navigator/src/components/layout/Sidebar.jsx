@@ -30,10 +30,10 @@ export default function Sidebar({ overview }) {
         {/* Logo/Header */}
         <div className="flex h-16 items-center justify-between px-4 border-b border-gray-800">
           {!isCollapsed && (
-            <>
+            <flex className="flex items-center gap-2.5">
               <h1 className="text-xl font-bold text-white">globe</h1>
-              <img src="src/assets/earth.png" alt="🌏" className="h-8 w-8" />
-            </>
+              <img src="src/assets/earth.png" alt="🌏" className="h-6 w-6" />
+            </flex>
           )}
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
