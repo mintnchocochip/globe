@@ -10,6 +10,8 @@ mod dbs;
 mod ops;
 mod ai;
 mod collections;
+mod state;
+use state::AppInfo;
 
 #[derive(Deserialize)]
 struct QueryRequest {
@@ -101,12 +103,19 @@ async fn main() -> std::io::Result<()> {
 
     eprintln!("MongoDB client created successfully (not yet verified network connectivity)");
 
+    let client_data = web::Data::new(client.clone());
+    let app_info = web::Data::new(AppInfo::new(&uri));
+
     eprintln!("Starting HTTP server on 127.0.0.1:6969");
-    HttpServer::new(move || {
+    HttpServer::new({
+        let client_data = client_data.clone();
+        let app_info = app_info.clone();
+        move || {
         let cors = Cors::default().allow_any_origin();
         App::new()
             .wrap(cors)
-            .app_data(web::Data::new(client.clone()))
+            .app_data(client_data.clone())
+            .app_data(app_info.clone())
             .service(run_query)
             .service(ai::query)
             .service(databases)
@@ -118,7 +127,9 @@ async fn main() -> std::io::Result<()> {
             .service(crate::collections::create_document)
             .service(crate::collections::update_document)
             .service(crate::collections::delete_document)
+            .service(dbs::dashboard)
             .service(dbs::get_status)
+    }
     })
     .bind(("127.0.0.1", 6969))?
     .run()

@@ -21,7 +21,7 @@ const navigation = [
   { name: 'Settings', href: '/settings', icon: Cog6ToothIcon },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ overview }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   return (
@@ -73,7 +73,12 @@ export default function Sidebar() {
           {!isCollapsed && (
             <div className="text-xs text-gray-400">
               <p>Connected to:</p>
-              <p className="text-gray-300 truncate">mongodb://localhost:27017</p>
+              <p
+                className="text-gray-300 truncate"
+                title={overview?.connectedTo || 'Connection information unavailable'}
+              >
+                {overview?.connectedTo ?? '—'}
+              </p>
             </div>
           )}
         </div>

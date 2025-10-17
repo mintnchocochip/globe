@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { MagnifyingGlassIcon, BellIcon, UserCircleIcon } from '@heroicons/react/24/outline';
 
-export default function Topbar() {
+export default function Topbar({ overview }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [status, setStatus] = useState({ state: 'loading', message: 'Checking backend…' });
 
@@ -43,6 +43,9 @@ export default function Topbar() {
 
   const { dot, text } = statusStyles[status.state] || statusStyles.loading;
 
+  const formatCount = (value) =>
+    typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString() : '—';
+
   return (
     <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
       <div className="flex items-center justify-between">
@@ -65,21 +68,23 @@ export default function Topbar() {
         {/* Right side - Connection info and actions */}
         <div className="flex items-center space-x-4">
           {/* Connection Status */}
-          <div className="flex items-center space-x-2">
-            <div className={`w-3 h-3 rounded-full ${dot}`}></div>
-            <span className="text-sm text-gray-600" title={status.message}>{text}</span>
+          <div className="flex flex-col">
+            <div className="flex items-center space-x-2">
+              <div className={`w-3 h-3 rounded-full ${dot}`}></div>
+              <span className="text-sm text-gray-600" title={status.message}>{text}</span>
+            </div>
           </div>
 
           {/* Quick Stats */}
           <div className="hidden lg:flex items-center space-x-4 text-sm text-gray-600">
             <div>
-              <span className="font-semibold">5</span> DBs
+              <span className="font-semibold">{formatCount(overview?.totals?.databases)}</span> DBs
             </div>
             <div>
-              <span className="font-semibold">23</span> Collections
+              <span className="font-semibold">{formatCount(overview?.totals?.collections)}</span> Collections
             </div>
             <div>
-              <span className="font-semibold">1.2M</span> Documents
+              <span className="font-semibold">{formatCount(overview?.totals?.documents)}</span> Documents
             </div>
           </div>
 
