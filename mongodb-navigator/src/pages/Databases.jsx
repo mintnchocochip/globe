@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { 
@@ -13,6 +14,7 @@ export default function Databases() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedDatabase, setSelectedDatabase] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     async function fetchDBs() {
@@ -80,16 +82,13 @@ export default function Databases() {
                             <div>
                               <span className="font-medium">{size}</span> size
                             </div>
-                            <div>
+                            {/* <div>
                               Updated N/A
-                            </div>
+                            </div> */}
                           </div>
                         </div>
                         <div className="flex space-x-2 ml-4">
-                          <Button size="sm" variant="outline">
-                            <EyeIcon className="h-4 w-4 mr-1" />
-                            View
-                          </Button>
+                          
                           <Button size="sm" variant="outline">
                             <ChartBarIcon className="h-4 w-4 mr-1" />
                             Stats
@@ -141,7 +140,11 @@ export default function Databases() {
 
                   <div className="pt-4 border-t border-gray-200">
                     <div className="space-y-2">
-                      <Button className="w-full" size="sm">
+                      <Button
+                        className="w-full"
+                        size="sm"
+                        onClick={() => navigate(`/collections`)}
+                      >
                         Browse Collections
                       </Button>
                       <Button variant="outline" className="w-full" size="sm">
