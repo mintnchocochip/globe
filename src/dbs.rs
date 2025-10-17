@@ -57,3 +57,15 @@ async fn databases(data: web::Data<Client>) -> actix_web::Result<HttpResponse> {
         }
     }
 }
+
+#[get("/status")]
+async fn get_status(data: web::Data<Client>) -> actix_web::Result<HttpResponse> {
+    // println!("Status request received");
+    match data.get_ref().database("admin").run_command(doc! { "ping": 1 }).await {
+        Ok(_) => Ok(HttpResponse::Ok().body("MongoDB is up and running")),
+        Err(e) => {
+            eprintln!("status error: {}", e);
+            Ok(HttpResponse::InternalServerError().body("failed to check MongoDB status"))
+        }
+    }
+}

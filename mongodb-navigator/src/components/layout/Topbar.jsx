@@ -1,8 +1,47 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { MagnifyingGlassIcon, BellIcon, UserCircleIcon } from '@heroicons/react/24/outline';
 
 export default function Topbar() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [status, setStatus] = useState({ state: 'loading', message: 'Checking backend…' });
+
+  useEffect(() => {
+    let isMounted = true;
+    const controller = new AbortController();
+
+    const fetchStatus = async () => {
+      try {
+        const response = await fetch('http://127.0.0.1:6969/status', { signal: controller.signal });
+        if (!response.ok) {
+          throw new Error(await response.text());
+        }
+        const text = await response.text();
+        if (isMounted) {
+          setStatus({ state: 'connected', message: text || 'MongoDB is up' });
+        }
+      } catch (err) {
+        if (!isMounted || err.name === 'AbortError') return;
+        setStatus({ state: 'error', message: err.message || 'Unable to reach backend' });
+      }
+    };
+
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 10000);
+
+    return () => {
+      isMounted = false;
+      controller.abort();
+      clearInterval(interval);
+    };
+  }, []);
+
+  const statusStyles = {
+    connected: { dot: 'bg-green-400', text: 'Connected' },
+    loading: { dot: 'bg-yellow-400 animate-pulse', text: 'Checking…' },
+    error: { dot: 'bg-red-400', text: 'Disconnected' },
+  };
+
+  const { dot, text } = statusStyles[status.state] || statusStyles.loading;
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
@@ -27,8 +66,8 @@ export default function Topbar() {
         <div className="flex items-center space-x-4">
           {/* Connection Status */}
           <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 bg-green-400 rounded-full"></div>
-            <span className="text-sm text-gray-600">Connected</span>
+            <div className={`w-3 h-3 rounded-full ${dot}`}></div>
+            <span className="text-sm text-gray-600" title={status.message}>{text}</span>
           </div>
 
           {/* Quick Stats */}

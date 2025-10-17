@@ -118,6 +118,7 @@ async fn main() -> std::io::Result<()> {
             .service(crate::collections::create_document)
             .service(crate::collections::update_document)
             .service(crate::collections::delete_document)
+            .service(dbs::get_status)
     })
     .bind(("127.0.0.1", 6969))?
     .run()
