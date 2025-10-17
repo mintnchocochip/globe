@@ -31,7 +31,7 @@ export default function Settings() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
-        <p className="text-gray-600 mt-2">Configure your MongoDB Navigator preferences</p>
+        <p className="text-gray-600 mt-2">Configure your globe🌏 preferences</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -220,7 +220,7 @@ export default function Settings() {
       {/* About Section */}
       <Card>
         <CardHeader>
-          <CardTitle>About MongoDB Navigator</CardTitle>
+          <CardTitle>About globe🌏</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

@@ -5,9 +5,11 @@ use serde::{Deserialize, Serialize};
 use dotenv;
 use std::env;
 use futures::stream::TryStreamExt;
+use crate::dbs::databases;
 mod dbs;
 mod ops;
 mod ai;
+mod collections;
 
 #[derive(Deserialize)]
 struct QueryRequest {
@@ -64,18 +66,6 @@ async fn run_query(
     }))
 }
 
-#[actix_web::get("/databases")]
-async fn get_databases(data: web::Data<Client>) -> actix_web::Result<HttpResponse> {
-    // Pass a &Client reference extracted from web::Data
-    match dbs::list_databases(data.get_ref()).await {
-        Ok(json) => Ok(HttpResponse::Ok().json(json)),
-        Err(e) => {
-            eprintln!("dbs error: {}", e);
-            Ok(HttpResponse::InternalServerError().body("failed to list databases"))
-        }
-    }
-}
-
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     // Load .env file into environment (if present).
@@ -90,7 +80,6 @@ async fn main() -> std::io::Result<()> {
 
     let uri = match env::var("MONGODB_URI") {
         Ok(mut u) => {
-            // Trim surrounding single or double quotes if present
             if (u.starts_with('"') && u.ends_with('"')) || (u.starts_with('\'') && u.ends_with('\'')) {
                 u = u[1..u.len()-1].to_string();
             }
@@ -102,23 +91,31 @@ async fn main() -> std::io::Result<()> {
         }
     };
 
-    // Parse client options and create the client, map mongodb errors to io::Error for compatibility
-    let client = Client::with_uri_str(&uri).await.map_err(|e| {
-        std::io::Error::new(std::io::ErrorKind::Other, format!("mongodb client error: {}", e))
-    })?;
+    let client = match Client::with_uri_str(&uri).await {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("mongodb client connection error: {}", e);
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, "mongodb client connection failed"));
+        }
+    };
 
+    eprintln!("MongoDB client created successfully (not yet verified network connectivity)");
+
+    eprintln!("Starting HTTP server on 127.0.0.1:6969");
     HttpServer::new(move || {
-        let cors = Cors::permissive();
+        let cors = Cors::default().allow_any_origin();
         App::new()
             .wrap(cors)
             .app_data(web::Data::new(client.clone()))
             .service(run_query)
-                .service(ai::ai_query)
-            .service(get_databases)
+            .service(ai::query)
+            .service(databases)
+            .service(crate::collections::collections)
+            .service(crate::collections::list_documents)
+            .service(crate::collections::list_indexes)
+            .service(crate::collections::get_document_by_id)
     })
     .bind(("127.0.0.1", 6969))?
     .run()
     .await
 }
-
-// no extra sync main — #[actix_web::main] above provides runtime entry

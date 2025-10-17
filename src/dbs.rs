@@ -1,5 +1,8 @@
 use mongodb::{bson::{self, doc, Document}, Client};
 use serde_json::Value as JsonValue;
+use actix_web::{post, web, HttpResponse,get};
+use serde::{Deserialize, Serialize};
+use std::env;
 
 pub async fn list_databases(client: &Client) -> mongodb::error::Result<JsonValue> {
     // Get database names
@@ -41,4 +44,16 @@ pub async fn list_databases(client: &Client) -> mongodb::error::Result<JsonValue
     }
 
     Ok(JsonValue::Array(out))
+}
+
+#[get("/databases")]
+async fn databases(data: web::Data<Client>) -> actix_web::Result<HttpResponse> {
+    println!("Databases request received");
+    match list_databases(data.get_ref()).await {
+        Ok(json) => Ok(HttpResponse::Ok().json(json)),
+        Err(e) => {
+            eprintln!("dbs error: {}", e);
+            Ok(HttpResponse::InternalServerError().body("failed to list databases"))
+        }
+    }
 }

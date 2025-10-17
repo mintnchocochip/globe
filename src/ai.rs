@@ -23,16 +23,25 @@ pub struct AiResponse {
     pub source: String,
 }
 
-async fn call_gemii(){
-    let mut session = Session::new().set_remember_reply(false);
+async fn call_gemini(prompt: &str) -> Result<JsonValue, Box<dyn std::error::Error>> {
+    // create a session if you need session state; otherwise pass the prompt directly
+    let mut _session = Session::new(6).set_remember_reply(false);
     let response = Gemini::new(
         env::var("GEMINI_API_KEY").expect("GEMINI_API_KEY not set"),
         "gemini-2.0-flash",
-        "You are a MongoDB query expert. You are to generate a proper MongoDB query relevant to the user prompt. The query should be in JSON format and must be syntactically correct. Do not include any explanations or additional text, only provide the JSON query. If the prompt is ambiguous or does not provide enough information to generate a query, respond with an empty JSON object {}. Here are some examples of user prompts and the corresponding MongoDB queries you should generate:
-        1. User Prompt: 'find products where price > 100 and name contains faizal'
-           MongoDB Query: { \"price\": { \"$gt\": 100 }, \"name\": { \"$regex\": \"faizal\", \"$options\": \"i\" } }"
-         )
-
+        Some(SystemInstruction::from_str("You are a MongoDB query expert. Given a natural language prompt, generate a valid MongoDB query in JSON format. Only output the JSON document without any additional text.")),
+        )
+        .set_json_mode(json!({
+            "collection_name":"collectionname",
+            "mongodb-query":{
+                "type":"json"
+            }
+        }))
+        .ask(_session.ask_string(prompt))
+        .await?;
+    let json_resp = response.get_json()?;
+    println!("Gemini response JSON: {:?}", json_resp);
+    Ok(json_resp)
 }
 
 #[post("/query")]

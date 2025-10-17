@@ -31,7 +31,7 @@ export default function Sidebar() {
         {/* Logo/Header */}
         <div className="flex h-16 items-center justify-between px-4 border-b border-gray-800">
           {!isCollapsed && (
-            <h1 className="text-xl font-bold text-white">MongoDB Navigator</h1>
+            <h1 className="text-xl font-bold text-white">globe🌏</h1>
           )}
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}

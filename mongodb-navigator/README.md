@@ -1,4 +1,4 @@
-# MongoDB Navigator
+# globe🌏
 
 A locally deployable MongoDB administration and navigation tool designed for environments where you only have SSH access to the server and need to host MongoDB management tools through the internet.
 
