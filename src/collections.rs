@@ -1,8 +1,9 @@
-use actix_web::{get, post, web, HttpResponse};
+use actix_web::{get, post, put, delete, web, HttpResponse};
 use mongodb::{bson::{self, doc, oid::ObjectId, Document, Bson}, Client};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use futures::stream::TryStreamExt;
+use std::collections::HashMap;
 
 #[derive(Deserialize)]
 pub struct ListDocsQuery {
@@ -139,6 +140,129 @@ pub async fn get_document_by_id(path: web::Path<(String, String, String)>, data:
 		Err(e) => {
 			eprintln!("find_one error: {}", e);
 			Ok(HttpResponse::InternalServerError().body("find_one failed"))
+		}
+	}
+}
+
+// collection stats via sampling
+#[get("/collections/{db_name}/{coll_name}/stats")]
+pub async fn collection_stats(path: web::Path<(String, String)>, query: web::Query<HashMap<String, String>>, data: web::Data<Client>) -> actix_web::Result<HttpResponse> {
+	let (db_name, coll_name) = path.into_inner();
+	let db = data.database(&db_name);
+	let coll = db.collection::<Document>(&coll_name);
+
+	let sample_size = query.get("sample").and_then(|s| s.parse::<i64>().ok()).unwrap_or(100);
+
+	// aggregate sample
+	let pipeline = vec![doc! { "$sample": { "size": sample_size } }];
+	let mut cursor = match coll.aggregate(pipeline).await {
+		Ok(c) => c,
+		Err(e) => return Ok(HttpResponse::InternalServerError().body(format!("aggregate failed: {}", e))),
+	};
+
+	// compute field stats: sample value and type set
+	let mut field_map: HashMap<String, (i64, Vec<String>, Option<JsonValue>)> = HashMap::new();
+
+	while let Some(doc) = cursor.try_next().await.map_err(|e| {
+		eprintln!("sample cursor error: {}", e);
+		actix_web::error::ErrorInternalServerError("cursor error")
+	})? {
+		let j = bson::to_bson(&doc).ok()
+			.and_then(|b| serde_json::to_value(&b).ok())
+			.unwrap_or(JsonValue::Null);
+		if let JsonValue::Object(map) = j {
+			for (k, v) in map.into_iter() {
+				let t = match &v {
+					JsonValue::Null => "null",
+					JsonValue::Bool(_) => "bool",
+					JsonValue::Number(_) => "number",
+					JsonValue::String(_) => "string",
+					JsonValue::Array(_) => "array",
+					JsonValue::Object(_) => "object",
+				};
+				let entry = field_map.entry(k.clone()).or_insert((0, Vec::new(), None));
+				entry.0 += 1;
+				if !entry.1.contains(&t.to_string()) {
+					entry.1.push(t.to_string());
+				}
+				if entry.2.is_none() {
+					entry.2 = Some(v.clone());
+				}
+			}
+		}
+	}
+
+	// produce JSON
+	let mut out = serde_json::Map::new();
+	for (k, (count, types, sample)) in field_map.into_iter() {
+		out.insert(k, serde_json::json!({"count": count, "types": types, "sample": sample}));
+	}
+
+	Ok(HttpResponse::Ok().json(serde_json::Value::Object(out)))
+}
+
+// Create document
+#[post("/documents/{db_name}/{coll_name}")]
+pub async fn create_document(path: web::Path<(String,String)>, body: web::Json<JsonValue>, data: web::Data<Client>) -> actix_web::Result<HttpResponse> {
+	let (db_name, coll_name) = path.into_inner();
+	let db = data.database(&db_name);
+	let coll = db.collection::<Document>(&coll_name);
+
+	let doc = match bson::to_bson(&body.into_inner()) {
+		Ok(Bson::Document(d)) => d,
+		Ok(other) => {
+			let mut d = Document::new(); d.insert("value", other); d
+		}
+		Err(e) => return Ok(HttpResponse::BadRequest().body(format!("invalid body: {}", e))),
+	};
+
+	match coll.insert_one(doc).await {
+		Ok(r) => Ok(HttpResponse::Ok().json(serde_json::json!({"inserted_id": r.inserted_id}))),
+		Err(e) => {
+			eprintln!("insert error: {}", e);
+			Ok(HttpResponse::InternalServerError().body("insert failed"))
+		}
+	}
+}
+
+// Update document by id (partial update: $set)
+#[put("/documents/{db_name}/{coll_name}/{id}")]
+pub async fn update_document(path: web::Path<(String,String,String)>, body: web::Json<JsonValue>, data: web::Data<Client>) -> actix_web::Result<HttpResponse> {
+	let (db_name, coll_name, id_str) = path.into_inner();
+	let db = data.database(&db_name);
+	let coll = db.collection::<Document>(&coll_name);
+
+	let filter = if let Ok(oid) = ObjectId::parse_str(&id_str) { doc!{"_id": oid} } else { doc!{"_id": id_str} };
+
+	let update_doc = match bson::to_bson(&body.into_inner()) {
+		Ok(Bson::Document(d)) => doc!{"$set": d},
+		Ok(other) => doc!{"$set": {"value": other}},
+		Err(e) => return Ok(HttpResponse::BadRequest().body(format!("invalid body: {}", e))),
+	};
+
+	match coll.update_one(filter, update_doc).await {
+		Ok(r) => Ok(HttpResponse::Ok().json(serde_json::json!({"matched": r.matched_count, "modified": r.modified_count}))),
+		Err(e) => {
+			eprintln!("update error: {}", e);
+			Ok(HttpResponse::InternalServerError().body("update failed"))
+		}
+	}
+}
+
+// Delete document
+#[delete("/documents/{db_name}/{coll_name}/{id}")]
+pub async fn delete_document(path: web::Path<(String,String,String)>, data: web::Data<Client>) -> actix_web::Result<HttpResponse> {
+	let (db_name, coll_name, id_str) = path.into_inner();
+	let db = data.database(&db_name);
+	let coll = db.collection::<Document>(&coll_name);
+
+	let filter = if let Ok(oid) = ObjectId::parse_str(&id_str) { doc!{"_id": oid} } else { doc!{"_id": id_str} };
+
+	match coll.delete_one(filter).await {
+		Ok(r) => Ok(HttpResponse::Ok().json(serde_json::json!({"deleted": r.deleted_count}))),
+		Err(e) => {
+			eprintln!("delete error: {}", e);
+			Ok(HttpResponse::InternalServerError().body("delete failed"))
 		}
 	}
 }

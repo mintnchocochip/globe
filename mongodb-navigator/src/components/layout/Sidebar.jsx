@@ -10,7 +10,6 @@ import {
   ChartBarIcon,
   Cog6ToothIcon,
 } from '@heroicons/react/24/outline';
-
 const navigation = [
   { name: 'Dashboard', href: '/', icon: HomeIcon },
   { name: 'Databases', href: '/databases', icon: CircleStackIcon },
@@ -31,7 +30,10 @@ export default function Sidebar() {
         {/* Logo/Header */}
         <div className="flex h-16 items-center justify-between px-4 border-b border-gray-800">
           {!isCollapsed && (
-            <h1 className="text-xl font-bold text-white">globe🌏</h1>
+            <>
+              <h1 className="text-xl font-bold text-white">globe</h1>
+              <img src="src/assets/earth.png" alt="🌏" className="h-8 w-8" />
+            </>
           )}
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
