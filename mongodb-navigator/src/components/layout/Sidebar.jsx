@@ -15,7 +15,6 @@ const navigation = [
   { name: 'Databases', href: '/databases', icon: CircleStackIcon },
   { name: 'Collections', href: '/collections', icon: RectangleGroupIcon },
   { name: 'Query Builder', href: '/query-builder', icon: MagnifyingGlassIcon },
-  { name: 'AI Query', href: '/ai-query', icon: FunnelIcon },
   { name: 'Schema Upload', href: '/schema-upload', icon: DocumentArrowUpIcon },
   { name: 'Stats & Monitoring', href: '/stats', icon: ChartBarIcon },
   { name: 'Settings', href: '/settings', icon: Cog6ToothIcon },

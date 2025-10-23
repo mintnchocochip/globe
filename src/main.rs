@@ -1,5 +1,6 @@
 use actix_web::{post, web, App, HttpServer, HttpResponse};
 use actix_cors::Cors;
+use actix_web::http::header;
 use mongodb::{bson::{self, doc, Document}, Client};
 use serde::{Deserialize, Serialize};
 use dotenv;
@@ -117,7 +118,11 @@ async fn main() -> std::io::Result<()> {
         let client_data = client_data.clone();
         let app_info = app_info.clone();
         move || {
-        let cors = Cors::default().allow_any_origin();
+        let cors = Cors::default()
+            .allow_any_origin()
+            .allowed_methods(vec!["GET", "POST", "OPTIONS"])
+            .allowed_headers(vec![header::CONTENT_TYPE, header::ACCEPT])
+            .max_age(3600);
         App::new()
             .wrap(cors)
             .app_data(client_data.clone())
