@@ -141,7 +141,9 @@ pub async fn dashboard(
 
         let collection_names = db.list_collection_names().await.unwrap_or_default();
         total_collections += collection_names.len() as i64;
-
+        if(name == "admin" || name == "local"){
+            continue;
+        }
         match db.run_command(doc! { "dbstats": 1 }).await {
             Ok(stats) => {
                 total_documents += document_i64(&stats, "objects");

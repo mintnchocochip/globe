@@ -1,38 +1,124 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { 
-  MagnifyingGlassIcon, 
-  PlayIcon, 
+import {
+  MagnifyingGlassIcon,
+  PlayIcon,
   DocumentTextIcon,
-  AdjustmentsHorizontalIcon 
+  AdjustmentsHorizontalIcon,
+  SparklesIcon,
 } from '@heroicons/react/24/outline';
 
+const API_BASE = 'http://127.0.0.1:6969';
+
 export default function QueryBuilder() {
-  const [selectedDatabase, setSelectedDatabase] = useState('ecommerce');
-  const [selectedCollection, setSelectedCollection] = useState('products');
+  const [databases, setDatabases] = useState([]);
+  const [databasesLoading, setDatabasesLoading] = useState(false);
+  const [collections, setCollections] = useState([]);
+  const [collectionsLoading, setCollectionsLoading] = useState(false);
+  const [metadataError, setMetadataError] = useState(null);
+
+  const [selectedDatabase, setSelectedDatabase] = useState('');
+  const [selectedCollection, setSelectedCollection] = useState('');
+
   const [queryFields, setQueryFields] = useState([
     { field: '', operator: 'equals', value: '', type: 'string' }
   ]);
   const [queryResults, setQueryResults] = useState([]);
+  const [queryError, setQueryError] = useState(null);
+  const [lastRun, setLastRun] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const databases = ['ecommerce', 'users', 'logs', 'analytics'];
-  const collections = {
-    ecommerce: ['products', 'orders', 'customers', 'categories'],
-    users: ['profiles', 'sessions', 'preferences'],
-    logs: ['access_logs', 'error_logs'],
-    analytics: ['events', 'metrics', 'reports']
-  };
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiQuery, setAiQuery] = useState(null);
+  const [aiMeta, setAiMeta] = useState(null);
+  const [aiError, setAiError] = useState(null);
 
   const fieldTypes = ['string', 'number', 'date', 'boolean', 'object'];
   const operators = {
     string: ['equals', 'contains', 'startsWith', 'endsWith', 'regex'],
-    number: ['equals', 'greater', 'less', 'between'],
-    date: ['equals', 'after', 'before', 'between'],
+    number: ['equals', 'greater', 'less'],
+    date: ['equals'],
     boolean: ['equals'],
-    object: ['exists', 'equals']
+    object: ['exists', 'equals'],
   };
+
+  useEffect(() => {
+    const loadDatabases = async () => {
+      setDatabasesLoading(true);
+      setMetadataError(null);
+      try {
+        const response = await fetch(`${API_BASE}/databases`);
+        if (!response.ok) {
+          throw new Error(await response.text());
+        }
+        const data = await response.json();
+        const dbNames = (data || []).map((db) => db.name || db);
+        setDatabases(dbNames);
+        setSelectedDatabase((current) => current || dbNames[0] || '');
+      } catch (err) {
+        console.error('load databases', err);
+        setMetadataError('Failed to load databases');
+      } finally {
+        setDatabasesLoading(false);
+      }
+    };
+
+    loadDatabases();
+  }, []);
+
+  useEffect(() => {
+    if (!selectedDatabase) {
+      setCollections([]);
+      setSelectedCollection('');
+      setCollectionsLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const loadCollections = async () => {
+      setCollectionsLoading(true);
+      setMetadataError(null);
+      try {
+        const response = await fetch(`${API_BASE}/collections/${selectedDatabase}`, {
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          throw new Error(await response.text());
+        }
+        const data = await response.json();
+        const names = data?.collections || [];
+        setCollections(names);
+        setSelectedCollection((current) => {
+          if (current && names.includes(current)) {
+            return current;
+          }
+          return names[0] || '';
+        });
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+        console.error('load collections', err);
+        setMetadataError('Failed to load collections');
+        setCollections([]);
+        setSelectedCollection('');
+      } finally {
+        setCollectionsLoading(false);
+      }
+    };
+
+    loadCollections();
+    return () => controller.abort();
+  }, [selectedDatabase]);
+
+  useEffect(() => {
+    setAiQuery(null);
+    setAiMeta(null);
+    setAiError(null);
+    setQueryResults([]);
+    setLastRun(null);
+    setQueryError(null);
+  }, [selectedDatabase, selectedCollection]);
 
   const addQueryField = () => {
     setQueryFields([...queryFields, { field: '', operator: 'equals', value: '', type: 'string' }]);
@@ -48,38 +134,80 @@ export default function QueryBuilder() {
     setQueryFields(updated);
   };
 
-  const buildQuery = () => {
+  const manualQuery = useMemo(() => {
     const query = {};
     queryFields.forEach(field => {
-      if (field.field && field.value) {
-        switch (field.operator) {
-          case 'equals':
-            query[field.field] = field.value;
-            break;
-          case 'contains':
-            query[field.field] = { $regex: field.value, $options: 'i' };
-            break;
-          case 'greater':
-            query[field.field] = { $gt: Number(field.value) };
-            break;
-          case 'less':
-            query[field.field] = { $lt: Number(field.value) };
-            break;
-          // Add more operators as needed
+      if (!field.field || field.value === '') return;
+      const coerceValue = () => {
+        if (field.type === 'number') {
+          const parsed = Number(field.value);
+          return Number.isNaN(parsed) ? field.value : parsed;
         }
+        if (field.type === 'boolean') {
+          const lower = String(field.value).toLowerCase();
+          if (lower === 'true') return true;
+          if (lower === 'false') return false;
+        }
+        return field.value;
+      };
+      switch (field.operator) {
+        case 'equals':
+          query[field.field] = coerceValue();
+          break;
+        case 'contains':
+          query[field.field] = { $regex: field.value, $options: 'i' };
+          break;
+        case 'greater':
+          {
+            const parsed = Number(field.value);
+            if (!Number.isNaN(parsed)) {
+              query[field.field] = { $gt: parsed };
+            }
+          }
+          break;
+        case 'less':
+          {
+            const parsed = Number(field.value);
+            if (!Number.isNaN(parsed)) {
+              query[field.field] = { $lt: parsed };
+            }
+          }
+          break;
+        case 'startsWith':
+          query[field.field] = { $regex: `^${field.value}`, $options: 'i' };
+          break;
+        case 'endsWith':
+          query[field.field] = { $regex: `${field.value}$`, $options: 'i' };
+          break;
+        case 'regex':
+          query[field.field] = { $regex: field.value };
+          break;
+        case 'exists':
+          query[field.field] = { $exists: true };
+          break;
+        default:
+          break;
       }
     });
     return query;
-  };
+  }, [queryFields]);
 
-  const executeQuery = async () => {
+  const executeQuery = async (query, source) => {
+    if (!selectedDatabase || !selectedCollection) {
+      setQueryError('Select a database and collection first');
+      return;
+    }
     setIsLoading(true);
-    const query = buildQuery();
+    setQueryError(null);
     try {
-      const res = await fetch('http://127.0.0.1:6969/query', {
+      const res = await fetch(`${API_BASE}/query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ collection: selectedCollection, query }),
+        body: JSON.stringify({
+          database: selectedDatabase,
+          collection: selectedCollection,
+          query: query || {},
+        }),
       });
 
       if (!res.ok) {
@@ -89,12 +217,70 @@ export default function QueryBuilder() {
 
       const json = await res.json();
       setQueryResults(json.results || []);
+      setLastRun({ source, query: query || {} });
     } catch (err) {
-      console.error('Query error', err);
-      alert('Query failed: ' + err.message);
+      console.error('query error', err);
+      setQueryError(err.message || 'Query failed');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const runManualQuery = () => {
+    executeQuery(manualQuery, 'manual');
+  };
+
+  const requestAiQuery = async () => {
+    if (!selectedDatabase || !selectedCollection) {
+      setAiError('Select a database and collection first');
+      return;
+    }
+    if (!aiPrompt.trim()) {
+      setAiError('Describe what you want to find');
+      return;
+    }
+
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const res = await fetch(`${API_BASE}/ai/query`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          database: selectedDatabase,
+          collection: selectedCollection,
+          prompt: aiPrompt,
+        }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || res.statusText);
+      }
+
+      const data = await res.json();
+      setAiQuery(data.query || null);
+      setAiMeta({
+        source: data.source,
+        usedPrompt: data.used_prompt,
+        rawResponse: data.raw_response,
+      });
+    } catch (err) {
+      console.error('ai query', err);
+      setAiQuery(null);
+      setAiMeta(null);
+      setAiError(err.message || 'Failed to generate query');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const runAiQuery = () => {
+    if (!aiQuery) {
+      setAiError('Generate a query first');
+      return;
+    }
+    executeQuery(aiQuery, 'ai');
   };
 
   return (
@@ -124,10 +310,14 @@ export default function QueryBuilder() {
                     onChange={(e) => setSelectedDatabase(e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   >
-                    {databases.map(db => (
+                    <option value="" disabled>Select a database</option>
+                    {databases.map((db) => (
                       <option key={db} value={db}>{db}</option>
                     ))}
                   </select>
+                  {databasesLoading && (
+                    <p className="text-xs text-gray-500 mt-1">Loading databases…</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -138,10 +328,17 @@ export default function QueryBuilder() {
                     onChange={(e) => setSelectedCollection(e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   >
-                    {collections[selectedDatabase]?.map(collection => (
+                    <option value="" disabled>Select a collection</option>
+                    {collections.map((collection) => (
                       <option key={collection} value={collection}>{collection}</option>
                     ))}
                   </select>
+                  {collectionsLoading && (
+                    <p className="text-xs text-gray-500 mt-1">Loading collections…</p>
+                  )}
+                  {metadataError && (
+                    <p className="text-xs text-red-500 mt-1">{metadataError}</p>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -234,23 +431,78 @@ export default function QueryBuilder() {
 
           {/* Execute Button */}
           <div className="flex justify-end">
-            <Button onClick={executeQuery} disabled={isLoading}>
+            <Button onClick={runManualQuery} disabled={isLoading}>
               <PlayIcon className="h-4 w-4 mr-2" />
-              {isLoading ? 'Executing...' : 'Execute Query'}
+              {isLoading ? 'Running…' : 'Run Manual Query'}
             </Button>
           </div>
         </div>
 
         {/* Query Preview & Results */}
         <div className="space-y-6">
+          {/* AI Assistant */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <SparklesIcon className="h-5 w-5 mr-2" />
+                AI Assistant
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Describe the documents you want
+                </label>
+                <textarea
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  rows={4}
+                  placeholder="e.g. Orders created in the last week with total over 100"
+                  value={aiPrompt}
+                  onChange={(e) => {
+                    setAiPrompt(e.target.value);
+                    if (aiError) setAiError(null);
+                  }}
+                />
+                {aiError && (
+                  <p className="text-xs text-red-500 mt-1">{aiError}</p>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button onClick={requestAiQuery} disabled={aiLoading}>
+                  <SparklesIcon className="h-4 w-4 mr-2" />
+                  {aiLoading ? 'Generating…' : 'Generate Query'}
+                </Button>
+                <Button variant="outline" onClick={runAiQuery} disabled={!aiQuery || isLoading}>
+                  <PlayIcon className="h-4 w-4 mr-2" />
+                  {isLoading ? 'Running…' : 'Run AI Query'}
+                </Button>
+              </div>
+              {aiMeta && (
+                <div className="text-xs text-gray-500 space-y-1">
+                  <div>Source: {aiMeta.source || 'gemini'}</div>
+                  <div className="truncate" title={aiMeta.usedPrompt}>
+                    Prompt sent: {aiMeta.usedPrompt}
+                  </div>
+                </div>
+              )}
+              {aiQuery && (
+                <div>
+                  <div className="text-sm font-medium text-gray-700 mb-2">Generated Filter</div>
+                  <pre className="bg-gray-100 p-4 rounded-lg text-sm font-mono overflow-x-auto">
+                    {JSON.stringify(aiQuery, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </CardContent>
+          </Card>
           {/* Query Preview */}
           <Card>
             <CardHeader>
-              <CardTitle>Query Preview</CardTitle>
+              <CardTitle>Manual Query Preview</CardTitle>
             </CardHeader>
             <CardContent>
               <pre className="bg-gray-100 p-4 rounded-lg text-sm font-mono overflow-x-auto">
-                {JSON.stringify(buildQuery(), null, 2)}
+                {JSON.stringify(manualQuery, null, 2)}
               </pre>
             </CardContent>
           </Card>
@@ -264,15 +516,26 @@ export default function QueryBuilder() {
               </CardTitle>
             </CardHeader>
             <CardContent>
+              {queryError && (
+                <p className="text-sm text-red-500 mb-3">{queryError}</p>
+              )}
+              {lastRun && (
+                <p className="text-xs text-gray-500 mb-3">
+                  Last run: {lastRun.source === 'ai' ? 'AI assistant' : 'Manual builder'} query
+                </p>
+              )}
               {queryResults.length > 0 ? (
                 <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {queryResults.map((result) => (
-                    <div key={result._id} className="bg-gray-50 p-3 rounded-lg">
-                      <pre className="text-sm font-mono whitespace-pre-wrap">
-                        {JSON.stringify(result, null, 2)}
-                      </pre>
-                    </div>
-                  ))}
+                  {queryResults.map((result, idx) => {
+                    const key = result?._id?.$oid || result?._id || idx;
+                    return (
+                      <div key={key} className="bg-gray-50 p-3 rounded-lg">
+                        <pre className="text-sm font-mono whitespace-pre-wrap">
+                          {JSON.stringify(result, null, 2)}
+                        </pre>
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="text-center text-gray-500 py-8">

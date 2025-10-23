@@ -15,6 +15,7 @@ use state::AppInfo;
 
 #[derive(Deserialize)]
 struct QueryRequest {
+    database: Option<String>,
     collection: String,
     query: serde_json::Value,
 }
@@ -31,7 +32,12 @@ async fn run_query(
     req: web::Json<QueryRequest>,
     data: web::Data<Client>,
 ) -> actix_web::Result<HttpResponse> {
-    let db_name = env::var("DATABASE_NAME").unwrap_or_else(|_| "test".to_string());
+    let req = req.into_inner();
+    let db_name = req
+        .database
+        .clone()
+        .or_else(|| env::var("DATABASE_NAME").ok())
+        .unwrap_or_else(|| "test".to_string());
     let db = data.database(&db_name);
 
     // Use BSON Document as the collection element type

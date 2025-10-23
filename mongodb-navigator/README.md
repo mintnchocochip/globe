@@ -7,7 +7,7 @@ A locally deployable MongoDB administration and navigation tool designed for env
 - **Dashboard**: Overview of database health, recent queries, and quick stats
 - **Database Explorer**: Browse databases and collections with detailed information
 - **Query Builder**: Schema-driven dynamic query interface with live preview
-- **Aggregation Builder**: JSON editor and visual pipeline builder for MongoDB aggregations
+- **Aggregation Builder**: JSON editor and visual pipeline builder for MongoDB AI-Query
 - **Schema Management**: Upload and manage collection schemas for dynamic form generation
 - **Real-time Monitoring**: Live charts and metrics for memory, connections, operations, and indexes
 - **Settings**: Connection configuration, authentication, and UI preferences
@@ -73,7 +73,7 @@ Configure your MongoDB connection in the Settings page:
 2. **Databases**: Database listing and management
 3. **Collections**: Collection browser and document viewer
 4. **Query Builder**: Visual query construction with schema awareness
-5. **Aggregations**: Pipeline builder for complex queries
+5. **AI-Query**: Pipeline builder for complex queries
 6. **Schema Upload**: Upload and manage JSON schemas
 7. **Stats & Monitoring**: Real-time performance metrics
 8. **Settings**: Application configuration
