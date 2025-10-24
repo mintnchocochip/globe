@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Layout from './components/layout/Layout';
 import Dashboard from './pages/Dashboard';
@@ -7,8 +8,14 @@ import QueryBuilder from './pages/QueryBuilder';
 import SchemaUpload from './pages/SchemaUpload';
 import Stats from './pages/Stats';
 import Settings from './pages/Settings';
+import { applyTheme, getStoredTheme } from './utils/theme';
 
 function App() {
+  useEffect(() => {
+    const isDark = getStoredTheme();
+    applyTheme(isDark);
+  }, []);
+
   return (
     <Router>
       <Routes>

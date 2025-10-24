@@ -24,19 +24,21 @@ export default function Sidebar({ overview }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   return (
-    <aside className={`${isCollapsed ? 'w-16' : 'w-64'} bg-gray-900 shadow-lg transition-all duration-300 flex-shrink-0`}>
+    <aside
+      className={`${isCollapsed ? 'w-16' : 'w-64'} flex-shrink-0 border-r border-gray-200 bg-white text-slate-900 shadow-lg transition-all duration-300 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100`}
+    >
       <div className="flex h-full flex-col">
         {/* Logo/Header */}
-        <div className="flex h-16 items-center justify-between px-4 border-b border-gray-800">
+        <div className="flex h-16 items-center justify-between border-b border-gray-200 px-4 dark:border-slate-800">
           {!isCollapsed && (
-            <flex className="flex items-center gap-2.5">
-              <h1 className="text-xl font-bold text-white">globe</h1>
+            <div className="flex items-center gap-2.5">
+              <h1 className="text-xl font-bold text-slate-900 dark:text-white">globe</h1>
               <img src="src/assets/earth.png" alt="🌏" className="h-6 w-6" />
-            </flex>
+            </div>
           )}
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-800"
+            className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-gray-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -51,10 +53,10 @@ export default function Sidebar({ overview }) {
               key={item.name}
               to={item.href}
               className={({ isActive }) =>
-                `group flex items-center px-2 py-2 text-sm font-medium rounded-lg transition-colors ${
+                `group flex items-center rounded-lg px-2 py-2 text-sm font-medium transition-colors ${
                   isActive
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                    ? 'bg-indigo-600 text-white dark:bg-indigo-500'
+                    : 'text-slate-600 hover:bg-gray-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white'
                 }`
               }
             >
@@ -68,12 +70,12 @@ export default function Sidebar({ overview }) {
         </nav>
 
         {/* Footer */}
-        <div className="border-t border-gray-800 p-4">
+        <div className="border-t border-gray-200 p-4 dark:border-slate-800">
           {!isCollapsed && (
-            <div className="text-xs text-gray-400">
+            <div className="text-xs text-slate-500 dark:text-slate-400">
               <p>Connected to:</p>
               <p
-                className="text-gray-300 truncate"
+                className="truncate text-slate-700 dark:text-slate-200"
                 title={overview?.connectedTo || 'Connection information unavailable'}
               >
                 {overview?.connectedTo ?? '—'}

@@ -36,17 +36,17 @@ export default function Layout() {
   }, []);
 
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="flex h-screen bg-gray-100 text-slate-900 transition-colors dark:bg-slate-950 dark:text-slate-100">
       {/* Sidebar */}
       <Sidebar overview={overview} />
       
       {/* Main content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+  <div className="flex-1 flex flex-col overflow-hidden">
         {/* Topbar */}
         <Topbar overview={overview} />
         
         {/* Page content */}
-        <main className="flex-1 p-6 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto bg-gray-50 p-6 transition-colors dark:bg-slate-950">
           <Outlet />
         </main>
       </div>

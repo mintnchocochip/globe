@@ -1,7 +1,22 @@
 @import "tailwindcss";
 
 @layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  :root.dark {
+    color-scheme: dark;
+  }
+
   body {
     font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+    background-color: theme('colors.gray.100');
+    color: theme('colors.slate.900');
+  }
+
+  :root.dark body {
+    background-color: theme('colors.slate.950');
+    color: theme('colors.slate.100');
   }
 }

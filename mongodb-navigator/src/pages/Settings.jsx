@@ -1,251 +1,278 @@
-import { useState } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
+import { useEffect, useState } from 'react';
+import { Cog6ToothIcon, KeyIcon, MoonIcon, ShieldCheckIcon, SunIcon } from '@heroicons/react/24/outline';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { Cog6ToothIcon, MoonIcon, SunIcon } from '@heroicons/react/24/outline';
+import { applyTheme, getStoredTheme, persistTheme } from '../utils/theme';
+
+const API_BASE = 'http://127.0.0.1:6969';
+
+const fieldClasses =
+  'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-indigo-400 dark:focus:ring-indigo-400';
 
 export default function Settings() {
-  const [settings, setSettings] = useState({
-    connectionString: 'mongodb://localhost:27017',
-    database: 'admin',
-    authEnabled: false,
-    username: '',
-    password: '',
-    darkMode: false,
-    autoRefresh: true,
-    refreshInterval: 5,
-    maxResults: 100,
-    enableNotifications: true
+  const [connectionInfo, setConnectionInfo] = useState({
+    connectionString: '',
+    shortenedConnectionString: '',
+    authEnabledDefault: true,
+    hasGeminiKey: false,
   });
+  const [authEnforced, setAuthEnforced] = useState(true);
+  const [geminiKey, setGeminiKey] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState('');
+  const [error, setError] = useState('');
+  const [isDarkMode, setIsDarkMode] = useState(() => getStoredTheme());
+  const [isLoading, setIsLoading] = useState(true);
 
-  const handleSettingChange = (key, value) => {
-    setSettings(prev => ({ ...prev, [key]: value }));
+  useEffect(() => {
+    let isMounted = true;
+    const controller = new AbortController();
+
+    const loadSettings = async () => {
+      setIsLoading(true);
+      try {
+        const response = await fetch(`${API_BASE}/settings`, { signal: controller.signal });
+        if (!response.ok) {
+          throw new Error(await response.text());
+        }
+        const data = await response.json();
+
+        if (isMounted) {
+          setConnectionInfo({
+            connectionString: data.connectionString,
+            shortenedConnectionString: data.shortenedConnectionString,
+            authEnabledDefault: data.authEnabledDefault,
+            hasGeminiKey: data.hasGeminiKey,
+          });
+          setAuthEnforced(Boolean(data.authEnabledDefault));
+          setError('');
+        }
+      } catch (err) {
+        if (isMounted && err.name !== 'AbortError') {
+          setError(err.message || 'Unable to load settings');
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadSettings();
+
+    return () => {
+      isMounted = false;
+      controller.abort();
+    };
+  }, []);
+
+  useEffect(() => {
+    applyTheme(isDarkMode);
+    persistTheme(isDarkMode);
+  }, [isDarkMode]);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    setSaveMessage('');
+    setError('');
+
+    try {
+      const response = await fetch(`${API_BASE}/settings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          geminiApiKey: geminiKey || undefined,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+
+      const data = await response.json();
+
+      setSaveMessage('Settings saved successfully. Gemini key is now registered for this session.');
+      setGeminiKey('');
+      setConnectionInfo((prev) => ({
+        ...prev,
+        hasGeminiKey: Boolean(data.hasGeminiKey),
+      }));
+    } catch (err) {
+      setError(err.message || 'Failed to save settings');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const saveSettings = () => {
-    // Simulate saving settings
-    alert('Settings saved successfully!');
-  };
+  const connectionStringDisplay =
+    connectionInfo.connectionString || (isLoading ? 'Loading connection string…' : 'Not available');
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
-        <p className="text-gray-600 mt-2">Configure your globe🌏 preferences</p>
+        <h1 className="text-3xl font-bold text-gray-900 transition-colors dark:text-white">Settings</h1>
+        <p className="mt-2 text-gray-600 transition-colors dark:text-slate-300">
+          Manage environment-backed configuration and runtime preferences for globe🌏.
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Connection Settings */}
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700 transition-colors dark:border-red-400/40 dark:bg-red-500/10 dark:text-red-200">
+          {error}
+        </div>
+      )}
+
+      {saveMessage && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700 transition-colors dark:border-emerald-400/40 dark:bg-emerald-500/10 dark:text-emerald-200">
+          {saveMessage}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
-              <Cog6ToothIcon className="h-5 w-5 mr-2" />
-              Connection Settings
+              <Cog6ToothIcon className="mr-2 h-5 w-5" />
+              Connection
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Connection String
+              <label className="mb-2 block text-sm font-medium text-gray-700 transition-colors dark:text-slate-300">
+                Active Connection String
               </label>
               <input
                 type="text"
-                value={settings.connectionString}
-                onChange={(e) => handleSettingChange('connectionString', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                placeholder="mongodb://localhost:27017"
+                value={connectionStringDisplay}
+                readOnly
+                className={`${fieldClasses} cursor-not-allowed opacity-75`}
               />
+              {connectionInfo.shortenedConnectionString && (
+                <p className="mt-1 text-xs text-gray-500 transition-colors dark:text-slate-400">
+                  Preview: {connectionInfo.shortenedConnectionString}
+                </p>
+              )}
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Default Database
-              </label>
-              <input
-                type="text"
-                value={settings.database}
-                onChange={(e) => handleSettingChange('database', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                placeholder="admin"
-              />
+            <div className="rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 text-sm text-indigo-700 transition-colors dark:border-indigo-400/30 dark:bg-indigo-500/10 dark:text-indigo-200">
+              The connection string is sourced from the `MONGODB_URI` environment variable loaded at startup.
             </div>
 
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="authEnabled"
-                checked={settings.authEnabled}
-                onChange={(e) => handleSettingChange('authEnabled', e.target.checked)}
-                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-              />
-              <label htmlFor="authEnabled" className="ml-2 block text-sm text-gray-900">
-                Enable Authentication
-              </label>
-            </div>
-
-            {settings.authEnabled && (
-              <>
+            <div className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 transition-colors dark:border-slate-700">
+              <div className="flex items-center gap-3">
+                <ShieldCheckIcon className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Username
-                  </label>
-                  <input
-                    type="text"
-                    value={settings.username}
-                    onChange={(e) => handleSettingChange('username', e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  />
+                  <p className="text-sm font-medium text-gray-900 transition-colors dark:text-slate-100">
+                    Authentication Enforced
+                  </p>
+                  <p className="text-xs text-gray-600 transition-colors dark:text-slate-400">
+                    New sessions require credentials by default.
+                  </p>
                 </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Password
-                  </label>
-                  <input
-                    type="password"
-                    value={settings.password}
-                    onChange={(e) => handleSettingChange('password', e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                </div>
-              </>
-            )}
+              </div>
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                authEnforced
+                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200'
+                  : 'bg-gray-200 text-gray-700 dark:bg-slate-700 dark:text-slate-200'
+              }`}>
+                {authEnforced ? 'Enabled' : 'Disabled'}
+              </span>
+            </div>
           </CardContent>
         </Card>
 
-        {/* UI Preferences */}
         <Card>
           <CardHeader>
-            <CardTitle>UI Preferences</CardTitle>
+            <CardTitle className="flex items-center">
+              <KeyIcon className="mr-2 h-5 w-5" />
+              Gemini API Key
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700 transition-colors dark:text-slate-300">
+                Enter Gemini API key
+              </label>
+              <input
+                type="password"
+                value={geminiKey}
+                onChange={(event) => setGeminiKey(event.target.value)}
+                className={fieldClasses}
+                placeholder={connectionInfo.hasGeminiKey ? '••••••••••••••••' : 'AI token starts with AIza...'}
+              />
+            </div>
+
+            <p className="text-xs text-gray-500 transition-colors dark:text-slate-400">
+              Keys are stored in-memory for the running server process. Restarting will require re-entry unless the
+              `GEMINI_API_KEY` environment variable is set.
+            </p>
+
+            <div className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 transition-colors dark:border-slate-700">
+              <div>
+                <p className="text-sm font-medium text-gray-900 transition-colors dark:text-slate-100">
+                  Status
+                </p>
+                <p className="text-xs text-gray-600 transition-colors dark:text-slate-400">
+                  {connectionInfo.hasGeminiKey ? 'Requests can use Gemini right away.' : 'AI features require a valid Gemini key.'}
+                </p>
+              </div>
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                connectionInfo.hasGeminiKey
+                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200'
+                  : 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200'
+              }`}>
+                {connectionInfo.hasGeminiKey ? 'Configured' : 'Missing'}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              {isDarkMode ? <MoonIcon className="mr-2 h-5 w-5" /> : <SunIcon className="mr-2 h-5 w-5" />}
+              Interface Theme
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <label className="block text-sm font-medium text-gray-900">
-                  Dark Mode
-                </label>
-                <p className="text-sm text-gray-600">Switch between light and dark themes</p>
+                <p className="text-sm font-medium text-gray-900 transition-colors dark:text-slate-100">
+                  Dark mode
+                </p>
+                <p className="text-xs text-gray-600 transition-colors dark:text-slate-400">
+                  Applies immediately and persists in this browser.
+                </p>
               </div>
               <button
-                onClick={() => handleSettingChange('darkMode', !settings.darkMode)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  settings.darkMode ? 'bg-indigo-600' : 'bg-gray-200'
+                type="button"
+                onClick={() => setIsDarkMode((value) => !value)}
+                className={`relative inline-flex h-6 w-12 items-center rounded-full border transition-colors ${
+                  isDarkMode
+                    ? 'border-indigo-500 bg-indigo-600'
+                    : 'border-gray-300 bg-gray-200 dark:border-slate-600 dark:bg-slate-700'
                 }`}
               >
                 <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    settings.darkMode ? 'translate-x-6' : 'translate-x-1'
+                  className={`inline-flex h-5 w-5 transform items-center justify-center rounded-full bg-white text-xs font-semibold text-gray-700 transition-transform dark:bg-slate-100 ${
+                    isDarkMode ? 'translate-x-6' : 'translate-x-1'
                   }`}
-                />
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <label className="block text-sm font-medium text-gray-900">
-                  Auto Refresh
-                </label>
-                <p className="text-sm text-gray-600">Automatically refresh data</p>
-              </div>
-              <button
-                onClick={() => handleSettingChange('autoRefresh', !settings.autoRefresh)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  settings.autoRefresh ? 'bg-indigo-600' : 'bg-gray-200'
-                }`}
-              >
-                <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    settings.autoRefresh ? 'translate-x-6' : 'translate-x-1'
-                  }`}
-                />
-              </button>
-            </div>
-
-            {settings.autoRefresh && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Refresh Interval (seconds)
-                </label>
-                <select
-                  value={settings.refreshInterval}
-                  onChange={(e) => handleSettingChange('refreshInterval', Number(e.target.value))}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 >
-                  <option value={1}>1 second</option>
-                  <option value={5}>5 seconds</option>
-                  <option value={10}>10 seconds</option>
-                  <option value={30}>30 seconds</option>
-                  <option value={60}>1 minute</option>
-                </select>
-              </div>
-            )}
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Maximum Results per Query
-              </label>
-              <input
-                type="number"
-                value={settings.maxResults}
-                onChange={(e) => handleSettingChange('maxResults', Number(e.target.value))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                min="10"
-                max="1000"
-              />
-            </div>
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="enableNotifications"
-                checked={settings.enableNotifications}
-                onChange={(e) => handleSettingChange('enableNotifications', e.target.checked)}
-                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-              />
-              <label htmlFor="enableNotifications" className="ml-2 block text-sm text-gray-900">
-                Enable Notifications
-              </label>
+                  {isDarkMode ? <MoonIcon className="h-4 w-4" /> : <SunIcon className="h-4 w-4" />}
+                </span>
+              </button>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Save Button */}
       <div className="flex justify-end">
-        <Button onClick={saveSettings}>
-          Save Settings
+        <Button onClick={handleSave} disabled={isSaving}>
+          {isSaving ? 'Saving…' : 'Save Settings'}
         </Button>
       </div>
-
-      {/* About Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle>About globe🌏</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <h4 className="font-medium text-gray-900 mb-2">Version Information</h4>
-              <div className="space-y-1 text-sm text-gray-600">
-                <p>Version: 1.0.0</p>
-                <p>Build: 2024.10.01</p>
-                <p>Node.js: {typeof window !== 'undefined' ? 'Browser' : 'N/A'}</p>
-              </div>
-            </div>
-            <div>
-              <h4 className="font-medium text-gray-900 mb-2">Features</h4>
-              <ul className="space-y-1 text-sm text-gray-600">
-                <li>• Database & Collection Explorer</li>
-                <li>• Dynamic Query Builder</li>
-                <li>• Aggregation Pipeline Builder</li>
-                <li>• Real-time Monitoring</li>
-                <li>• Schema Management</li>
-                <li>• Export Capabilities</li>
-              </ul>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }

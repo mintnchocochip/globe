@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { MagnifyingGlassIcon, BellIcon, UserCircleIcon } from '@heroicons/react/24/outline';
 
 export default function Topbar({ overview }) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -47,20 +46,20 @@ export default function Topbar({ overview }) {
     typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString() : '—';
 
   return (
-    <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
-      <div className="flex items-right justify-between">
+    <header className="border-b border-gray-200 bg-white px-6 py-4 shadow-sm transition-colors dark:border-slate-800 dark:bg-slate-900">
+      <div className="flex items-center justify-between">
         {/* Right side - Connection info and actions */}
         <div className="flex items-center space-x-4">
           {/* Connection Status */}
           <div className="flex flex-col">
             <div className="flex items-center space-x-2">
               <div className={`w-3 h-3 rounded-full ${dot}`}></div>
-              <span className="text-sm text-gray-600" title={status.message}>{text}</span>
+              <span className="text-sm text-gray-600 transition-colors dark:text-slate-300" title={status.message}>{text}</span>
             </div>
           </div>
 
           {/* Quick Stats */}
-          <div className="hidden lg:flex items-center space-x-4 text-sm text-gray-600">
+          <div className="hidden lg:flex items-center space-x-4 text-sm text-gray-600 transition-colors dark:text-slate-300">
             <div>
               <span className="font-semibold">{formatCount(overview?.totals?.databases)}</span> DBs
             </div>
