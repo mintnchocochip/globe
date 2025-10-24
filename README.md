@@ -34,6 +34,32 @@ A locally deployable MongoDB administration and navigation tool designed for env
 
 4. Open your browser and navigate to `http://localhost:5173`
 
+### Environment Files
+
+Create the two `.env` files before running the services:
+
+1. **Backend (`.env` in the repository root or `src/.env`)**
+
+  ```ini
+  # Required MongoDB connection string
+  MONGODB_URI=mongodb://localhost:27017
+
+  # Optional defaults used when requests omit explicit values
+  DATABASE_NAME=admin
+
+  # Optional Gemini key; omit if you plan to paste it in Settings at runtime
+  GEMINI_API_KEY=AIza...
+  ```
+
+2. **Frontend (`mongodb-navigator/.env`)**
+
+  ```ini
+  # URL where the Rust API is exposed
+  VITE_API_BASE_URL=http://127.0.0.1:6969
+  ```
+
+The backend automatically loads the root `.env` at startup and falls back to `src/.env` if needed. The frontend defaults to the same `http://127.0.0.1:6969` origin, and keeping `VITE_API_BASE_URL` in `mongodb-navigator/.env` documents the expected API location for collaborators or future customization.
+
 ### Building for Production
 
 ```bash
