@@ -12,7 +12,9 @@ mod ops;
 mod ai;
 mod collections;
 mod state;
+mod monitoring;
 use state::AppInfo;
+use monitoring::MonitoringState;
 
 #[derive(Deserialize)]
 struct QueryRequest {
@@ -112,11 +114,13 @@ async fn main() -> std::io::Result<()> {
 
     let client_data = web::Data::new(client.clone());
     let app_info = web::Data::new(AppInfo::new(&uri));
+    let monitoring_state = web::Data::new(MonitoringState::new());
 
     eprintln!("Starting HTTP server on 127.0.0.1:6969");
     HttpServer::new({
         let client_data = client_data.clone();
         let app_info = app_info.clone();
+        let monitoring_state = monitoring_state.clone();
         move || {
         let cors = Cors::default()
             .allow_any_origin()
@@ -127,6 +131,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(cors)
             .app_data(client_data.clone())
             .app_data(app_info.clone())
+            .app_data(monitoring_state.clone())
             .service(run_query)
             .service(ai::query)
             .service(databases)
@@ -140,6 +145,7 @@ async fn main() -> std::io::Result<()> {
             .service(crate::collections::delete_document)
             .service(dbs::dashboard)
             .service(dbs::get_status)
+        .service(monitoring::metrics)
     }
     })
     .bind(("127.0.0.1", 6969))?

@@ -302,31 +302,28 @@ async fn describe_collection(
         }
     }
 
-    let mut field_array: Vec<JsonValue> = fields
-        .into_iter()
-        .map(|(name, info)| {
-            let mut type_list: Vec<String> = info.types.into_iter().collect();
-            type_list.sort();
+    let mut sorted_fields: Vec<(String, FieldInfo)> = fields.into_iter().collect();
+    sorted_fields.sort_by(|a, b| b.1.count.cmp(&a.1.count));
+
+    let mut field_map = serde_json::Map::new();
+    for (name, info) in sorted_fields {
+        let mut type_list: Vec<String> = info.types.into_iter().collect();
+        type_list.sort();
+        field_map.insert(
+            name,
             json!({
-                "name": name,
+                "count": info.count,
                 "types": type_list,
                 "sample": info.sample.unwrap_or(JsonValue::Null),
-                "occurrence": info.count,
-            })
-        })
-        .collect();
-
-    field_array.sort_by(|a, b| {
-        let a_occ = a.get("occurrence").and_then(|v| v.as_i64()).unwrap_or(0);
-        let b_occ = b.get("occurrence").and_then(|v| v.as_i64()).unwrap_or(0);
-        b_occ.cmp(&a_occ)
-    });
+            }),
+        );
+    }
 
     Ok(json!({
         "database": database,
         "collection": collection,
         "sampledDocumentCount": totals,
-        "fields": field_array,
+        "fields": field_map,
     }))
 }
 
@@ -443,27 +440,66 @@ pub async fn query(
         .or_else(|| env::var("DATABASE_NAME").ok())
         .unwrap_or_else(|| "test".to_string());
 
-    let schema_summary = match describe_collection(client.get_ref(), &db_name, &req.collection).await {
-        Ok(summary) => summary,
+    let (database_schema, mut schema_summary) = match describe_database(
+        client.get_ref(),
+        &db_name,
+        &req.collection,
+    )
+    .await
+    {
+        Ok((db_schema, maybe_target)) => {
+            let target = if let Some(summary) = maybe_target {
+                summary
+            } else {
+                match describe_collection(client.get_ref(), &db_name, &req.collection).await {
+                    Ok(summary) => summary,
+                    Err(err) => {
+                        eprintln!("failed to build schema summary: {}", err);
+                        JsonValue::Null
+                    }
+                }
+            };
+            (db_schema, target)
+        }
         Err(err) => {
-            eprintln!("failed to build schema summary: {}", err);
-            JsonValue::Null
+            eprintln!("failed to build database schema: {}", err);
+            let summary = match describe_collection(client.get_ref(), &db_name, &req.collection).await {
+                Ok(summary) => summary,
+                Err(inner) => {
+                    eprintln!("failed to build schema summary: {}", inner);
+                    JsonValue::Null
+                }
+            };
+            (JsonValue::Null, summary)
         }
     };
+
+    if schema_summary.is_null() {
+        schema_summary = JsonValue::Null;
+    }
 
     let schema_text = if schema_summary.is_null() {
         "Unable to derive schema summary.".to_string()
     } else {
-        serde_json::to_string_pretty(&schema_summary).unwrap_or_else(|_| schema_summary.to_string())
+        serde_json::to_string_pretty(&schema_summary)
+            .unwrap_or_else(|_| schema_summary.to_string())
+    };
+
+    let database_schema_text = if database_schema.is_null() {
+        "Unable to derive database-wide schema summary.".to_string()
+    } else {
+        serde_json::to_string_pretty(&database_schema)
+            .unwrap_or_else(|_| database_schema.to_string())
     };
 
     // Provide field hints when there’s no sample to reduce empty outputs.
     let augmented_prompt = format!(
-        "{}\n\nDatabase: {}\nCollection: {}\nSchema Summary (derived from recent samples):\n{}\n\nReturn ONLY a strict JSON object that can be passed to MongoDB find() as the filter. If schema is unknown, infer likely fields (e.g., \"department\", \"program\", \"course\", \"branch\"). Use MongoDB Extended JSON where appropriate. No markdown or prose.",
+        "{}\n\nDatabase: {}\nCollection: {}\nCollection Schema Summary (derived from recent samples):\n{}\n\nDatabase Schema Overview (all collections):\n{}\n\nReturn ONLY a strict JSON object that can be passed to MongoDB find() as the filter. If schema is unknown, infer likely fields (e.g., \"department\", \"program\", \"course\", \"branch\"). Use MongoDB Extended JSON where appropriate. No markdown or prose.",
         req.prompt.trim(),
         db_name,
         req.collection,
-        schema_text
+        schema_text,
+        database_schema_text
     );
 
     match call_gemini(&augmented_prompt).await {
@@ -478,4 +514,47 @@ pub async fn query(
             Ok(HttpResponse::InternalServerError().body("failed"))
         }
     }
+}
+
+async fn describe_database(
+    client: &Client,
+    database: &str,
+    target_collection: &str,
+) -> mongodb::error::Result<(JsonValue, Option<JsonValue>)> {
+    let db = client.database(database);
+    let collection_names = db.list_collection_names().await?;
+
+    let mut summaries: Vec<JsonValue> = Vec::new();
+    let mut target_summary: Option<JsonValue> = None;
+
+    for name in collection_names {
+        match describe_collection(client, database, &name).await {
+            Ok(summary) => {
+                if name == target_collection {
+                    target_summary = Some(summary.clone());
+                }
+                summaries.push(summary);
+            }
+            Err(err) => {
+                eprintln!(
+                    "failed to describe collection {}.{}: {}",
+                    database, name, err
+                );
+                summaries.push(json!({
+                    "database": database,
+                    "collection": name,
+                    "error": err.to_string()
+                }));
+            }
+        }
+    }
+
+    Ok((
+        json!({
+            "database": database,
+            "collectionCount": summaries.len(),
+            "collections": summaries,
+        }),
+        target_summary,
+    ))
 }

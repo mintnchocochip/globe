@@ -25,6 +25,7 @@ export default function QueryBuilder() {
     { field: '', operator: 'equals', value: '', type: 'string' }
   ]);
   const [queryResults, setQueryResults] = useState([]);
+  const [resultsText, setResultsText] = useState('');
   const [queryError, setQueryError] = useState(null);
   const [lastRun, setLastRun] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -116,6 +117,7 @@ export default function QueryBuilder() {
     setAiMeta(null);
     setAiError(null);
     setQueryResults([]);
+    setResultsText('');
     setLastRun(null);
     setQueryError(null);
   }, [selectedDatabase, selectedCollection]);
@@ -216,11 +218,14 @@ export default function QueryBuilder() {
       }
 
       const json = await res.json();
-      setQueryResults(json.results || []);
+      const resultsArray = json.results || [];
+      setQueryResults(resultsArray);
+      setResultsText(JSON.stringify(resultsArray, null, 2));
       setLastRun({ source, query: query || {} });
     } catch (err) {
       console.error('query error', err);
       setQueryError(err.message || 'Query failed');
+      setResultsText('');
     } finally {
       setIsLoading(false);
     }
@@ -525,17 +530,30 @@ export default function QueryBuilder() {
                 </p>
               )}
               {queryResults.length > 0 ? (
-                <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {queryResults.map((result, idx) => {
-                    const key = result?._id?.$oid || result?._id || idx;
-                    return (
-                      <div key={key} className="bg-gray-50 p-3 rounded-lg">
-                        <pre className="text-sm font-mono whitespace-pre-wrap">
-                          {JSON.stringify(result, null, 2)}
-                        </pre>
-                      </div>
-                    );
-                  })}
+                <div className="space-y-3">
+                  <div className="max-h-64 overflow-y-auto space-y-2">
+                    {queryResults.map((result, idx) => {
+                      const key = result?._id?.$oid || result?._id || idx;
+                      return (
+                        <div key={key} className="bg-gray-50 p-3 rounded-lg">
+                          <pre className="text-sm font-mono whitespace-pre-wrap">
+                            {JSON.stringify(result, null, 2)}
+                          </pre>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Raw Results
+                    </label>
+                    <textarea
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 font-mono text-sm bg-gray-50"
+                      rows={10}
+                      value={resultsText}
+                      readOnly
+                    />
+                  </div>
                 </div>
               ) : (
                 <div className="text-center text-gray-500 py-8">
